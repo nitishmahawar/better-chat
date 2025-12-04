@@ -3,13 +3,16 @@ import "@/polyfill";
 import { RPCHandler } from "@orpc/server/fetch";
 import { createFileRoute } from "@tanstack/react-router";
 import { router } from "@/orpc/router";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 
 const handler = new RPCHandler(router);
 
 async function handle({ request }: { request: Request }) {
   const { response } = await handler.handle(request, {
     prefix: "/api/rpc",
-    context: {},
+    context: {
+      headers: getRequestHeaders(),
+    },
   });
 
   return response ?? new Response("Not Found", { status: 404 });
