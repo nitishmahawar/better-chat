@@ -1,0 +1,24 @@
+{
+  "projectName": "better-chat",
+  "mode": "file-router",
+  "typescript": true,
+  "tailwind": true,
+  "packageManager": "pnpm",
+  "addOnOptions": {
+    "drizzle": {
+      "database": "postgresql"
+    }
+  },
+  "git": true,
+  "version": 1,
+  "framework": "react-cra",
+  "chosenAddOns": [
+    "nitro",
+    "start",
+    "compiler",
+    "drizzle",
+    "oRPC",
+    "t3env",
+    "tanstack-query"
+  ]
+}
