@@ -6,119 +6,113 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
-import {
-  ArrowUp,
-  Copy,
-  Globe,
-  MessageCircle,
-  Mic,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  PlusIcon,
-  Search,
-  ThumbsDown,
-  ThumbsUp,
-  Trash,
-} from "lucide-react";
-import { useRef, useState } from "react";
+import { MessageCircle, PlusIcon, Search } from "lucide-react";
 import { NavUser } from "./nav-user";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { orpc } from "@/orpc/client";
+import { useInView } from "react-intersection-observer";
+import { Conversation } from "@/db/schema/conversation";
+import { useEffect, useMemo } from "react";
 
-// Initial conversation history
-const conversationHistory = [
-  {
-    period: "Today",
-    conversations: [
-      {
-        id: "t1",
-        title: "Project roadmap discussion",
-        lastMessage:
-          "Let's prioritize the authentication features for the next sprint.",
-        timestamp: new Date().setHours(new Date().getHours() - 2),
-      },
-      {
-        id: "t2",
-        title: "API Documentation Review",
-        lastMessage:
-          "The endpoint descriptions need more detail about rate limiting.",
-        timestamp: new Date().setHours(new Date().getHours() - 5),
-      },
-      {
-        id: "t3",
-        title: "Frontend Bug Analysis",
-        lastMessage:
-          "I found the issue - we need to handle the null state in the user profile component.",
-        timestamp: new Date().setHours(new Date().getHours() - 8),
-      },
-    ],
-  },
-  {
-    period: "Yesterday",
-    conversations: [
-      {
-        id: "y1",
-        title: "Database Schema Design",
-        lastMessage:
-          "Let's add indexes to improve query performance on these tables.",
-        timestamp: new Date().setDate(new Date().getDate() - 1),
-      },
-      {
-        id: "y2",
-        title: "Performance Optimization",
-        lastMessage:
-          "The lazy loading implementation reduced initial load time by 40%.",
-        timestamp: new Date().setDate(new Date().getDate() - 1),
-      },
-    ],
-  },
-  {
-    period: "Last 7 days",
-    conversations: [
-      {
-        id: "w1",
-        title: "Authentication Flow",
-        lastMessage: "We should implement the OAuth2 flow with refresh tokens.",
-        timestamp: new Date().setDate(new Date().getDate() - 3),
-      },
-      {
-        id: "w2",
-        title: "Component Library",
-        lastMessage:
-          "These new UI components follow the design system guidelines perfectly.",
-        timestamp: new Date().setDate(new Date().getDate() - 5),
-      },
-      {
-        id: "w3",
-        title: "UI/UX Feedback",
-        lastMessage:
-          "The navigation redesign received positive feedback from the test group.",
-        timestamp: new Date().setDate(new Date().getDate() - 6),
-      },
-    ],
-  },
-  {
-    period: "Last month",
-    conversations: [
-      {
-        id: "m1",
-        title: "Initial Project Setup",
-        lastMessage:
-          "All the development environments are now configured consistently.",
-        timestamp: new Date().setDate(new Date().getDate() - 15),
-      },
-    ],
-  },
-];
+// Helper function to group conversations by time period
+const groupConversationsByPeriod = (conversations: Conversation[]) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const lastWeek = new Date(today);
+  lastWeek.setDate(lastWeek.getDate() - 7);
+  const lastMonth = new Date(today);
+  lastMonth.setMonth(lastMonth.getMonth() - 1);
+  const last3Months = new Date(today);
+  last3Months.setMonth(last3Months.getMonth() - 3);
+  const last6Months = new Date(today);
+  last6Months.setMonth(last6Months.getMonth() - 6);
+
+  const groups: {
+    period: string;
+    conversations: Conversation[];
+  }[] = [
+    { period: "Today", conversations: [] },
+    { period: "Yesterday", conversations: [] },
+    { period: "Last 7 days", conversations: [] },
+    { period: "Last month", conversations: [] },
+    { period: "Last 3 months", conversations: [] },
+    { period: "Last 6 months", conversations: [] },
+    { period: "Older", conversations: [] },
+  ];
+
+  conversations.forEach((conversation) => {
+    const updatedAt = new Date(conversation.updatedAt);
+
+    if (updatedAt >= today) {
+      groups[0].conversations.push(conversation);
+    } else if (updatedAt >= yesterday) {
+      groups[1].conversations.push(conversation);
+    } else if (updatedAt >= lastWeek) {
+      groups[2].conversations.push(conversation);
+    } else if (updatedAt >= lastMonth) {
+      groups[3].conversations.push(conversation);
+    } else if (updatedAt >= last3Months) {
+      groups[4].conversations.push(conversation);
+    } else if (updatedAt >= last6Months) {
+      groups[5].conversations.push(conversation);
+    } else {
+      groups[6].conversations.push(conversation);
+    }
+  });
+
+  // Filter out empty groups
+  return groups.filter((group) => group.conversations.length > 0);
+};
 
 export const ChatSidebar = () => {
+  const { id } = useParams({ strict: false });
+  const currentConversationId = id;
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery(
+      orpc.conversations.list.infiniteOptions({
+        input: (pageParam) => ({ cursor: pageParam, limit: 20 }),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) => {
+          if (lastPage.nextCursor) {
+            return lastPage.nextCursor;
+          }
+          return undefined;
+        },
+      })
+    );
+
+  console.log(data);
+
+  const { ref, inView } = useInView({
+    threshold: 0,
+  });
+
+  // Fetch next page when the sentinel comes into view
+  useEffect(() => {
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Flatten all conversations from all pages
+  const allConversations = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.conversations);
+  }, [data]);
+
+  // Group conversations by time period
+  const groupedConversations = useMemo(
+    () => groupConversationsByPeriod(allConversations),
+    [allConversations]
+  );
+
   return (
     <Sidebar>
       <SidebarHeader className="px-2 py-4 space-y-2.5">
@@ -141,18 +135,48 @@ export const ChatSidebar = () => {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {conversationHistory.map((group) => (
-          <SidebarGroup key={group.period}>
-            <SidebarGroupLabel>{group.period}</SidebarGroupLabel>
-            <SidebarMenu>
-              {group.conversations.map((conversation) => (
-                <SidebarMenuButton key={conversation.id}>
-                  <span>{conversation.title}</span>
-                </SidebarMenuButton>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+        {isLoading ? (
+          <div className="flex items-center justify-center p-4">
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        ) : groupedConversations.length === 0 ? (
+          <div className="flex items-center justify-center p-4">
+            <p className="text-sm text-muted-foreground">
+              No conversations yet
+            </p>
+          </div>
+        ) : (
+          <>
+            {groupedConversations.map((group) => (
+              <SidebarGroup key={group.period}>
+                <SidebarGroupLabel>{group.period}</SidebarGroupLabel>
+                <SidebarMenu>
+                  {group.conversations.map((conversation) => (
+                    <SidebarMenuButton
+                      key={conversation.id}
+                      asChild
+                      isActive={currentConversationId === conversation.id}
+                    >
+                      <Link to="/c/$id" params={{ id: conversation.id }}>
+                        <span>{conversation.title || "Untitled"}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            ))}
+            {/* Sentinel element for infinite scroll */}
+            {hasNextPage && (
+              <div ref={ref} className="flex items-center justify-center p-4">
+                {isFetchingNextPage && (
+                  <p className="text-sm text-muted-foreground">
+                    Loading more...
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

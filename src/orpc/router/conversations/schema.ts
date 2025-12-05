@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-// Schema for listing conversations
+// Schema for listing conversations with cursor-based pagination
 export const listConversationsSchema = z.object({
-  limit: z.number().optional().default(50),
-  offset: z.number().optional().default(0),
+  limit: z.number().optional().default(20),
+  cursor: z.string().optional(), // ISO timestamp of the last conversation's updatedAt
   search: z.string().optional(),
 });
 

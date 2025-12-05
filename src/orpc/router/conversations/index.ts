@@ -1,7 +1,7 @@
 import { protectedProcedure } from "@/orpc";
 import { db } from "@/db";
 import { conversationTable, messageTable } from "@/db/schema";
-import { eq, desc, and, ilike } from "drizzle-orm";
+import { eq, desc, and, ilike, lt } from "drizzle-orm";
 import { ORPCError } from "@orpc/server";
 import {
   listConversationsSchema,
@@ -14,35 +14,68 @@ import {
 } from "./schema";
 
 export const conversationsRouter = {
-  // List all conversations for the current user
+  // List all conversations for the current user with cursor-based pagination
   list: protectedProcedure
     .input(listConversationsSchema)
     .handler(async ({ context, input }) => {
-      const userId = context.session.user.id;
+      try {
+        const userId = context.session.user.id;
 
-      // Build where conditions
-      const whereConditions = [eq(conversationTable.userId, userId)];
+        // Build where conditions
+        const whereConditions: any[] = [eq(conversationTable.userId, userId)];
 
-      if (input.search) {
-        whereConditions.push(
-          ilike(conversationTable.title, `%${input.search}%`)
-        );
-      }
+        if (input.search) {
+          whereConditions.push(
+            ilike(conversationTable.title, `%${input.search}%`)
+          );
+        }
 
-      const conversations = await db.query.conversation.findMany({
-        where: and(...whereConditions),
-        orderBy: [desc(conversationTable.updatedAt)],
-        limit: input.limit,
-        offset: input.offset,
-        with: {
-          messages: {
-            orderBy: [desc(messageTable.createdAt)],
-            limit: 1, // Get the last message for preview
+        // Add cursor condition if provided
+        if (input.cursor) {
+          whereConditions.push(
+            lt(conversationTable.updatedAt, new Date(input.cursor))
+          );
+        }
+
+        // Fetch one extra item to determine if there are more pages
+        const limit = input.limit + 1;
+
+        const conversations = await db.query.conversation.findMany({
+          where:
+            whereConditions.length > 1
+              ? and(...whereConditions)
+              : whereConditions[0],
+          orderBy: [desc(conversationTable.updatedAt)],
+          limit,
+          with: {
+            messages: {
+              orderBy: [desc(messageTable.createdAt)],
+              limit: 1, // Get the last message for preview
+            },
           },
-        },
-      });
+        });
 
-      return conversations;
+        // Check if there are more items
+        const hasMore = conversations.length > input.limit;
+        const items = hasMore ? conversations.slice(0, -1) : conversations;
+
+        // Get the cursor for the next page (updatedAt of the last item)
+        const nextCursor =
+          hasMore && items.length > 0
+            ? items[items.length - 1].updatedAt.toISOString()
+            : null;
+
+        return {
+          conversations: items,
+          nextCursor,
+        };
+      } catch (error) {
+        console.error("Error in conversations.list:", error);
+        throw new ORPCError("INTERNAL_SERVER_ERROR", {
+          message: "Failed to fetch conversations",
+          cause: error,
+        });
+      }
     }),
 
   // Get a single conversation with all messages

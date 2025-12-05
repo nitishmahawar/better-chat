@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ChatContainerContent,
   ChatContainerRoot,
@@ -28,32 +28,134 @@ import {
   Trash,
 } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, generateId } from "ai";
 import { LoadingMessage } from "./loading-message";
+import { useQuery } from "@tanstack/react-query";
+import { orpc } from "@/orpc/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export const Chat = () => {
+interface ChatProps {
+  paramChatId?: string;
+}
+
+export const Chat = ({ paramChatId }: ChatProps) => {
+  const conversationId = useRef<string>(paramChatId || generateId());
   const [prompt, setPrompt] = useState("");
-  const { sendMessage, status, messages } = useChat({
+  const { sendMessage, status, messages, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/chat",
     }),
+    id: conversationId.current,
   });
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading, isError, error } = useQuery(
+    orpc.conversations.get.queryOptions({
+      input: {
+        id: paramChatId || conversationId.current,
+      },
+      enabled: !!paramChatId, // Only fetch if we have a paramChatId
+    })
+  );
+
+  useEffect(() => {
+    if (data?.messages.length) {
+      setMessages(
+        data.messages.map((message) => {
+          return {
+            id: message.id,
+            role: message.role,
+            parts: [{ type: "text", text: message.content }],
+          };
+        })
+      );
+    }
+  }, [data?.messages.length]);
 
   const handleSubmit = () => {
     if (!prompt.trim()) return;
 
     setPrompt("");
-    sendMessage({
-      text: prompt,
-    });
+    sendMessage(
+      {
+        text: prompt,
+      },
+      { body: { conversationId: conversationId.current } }
+    );
   };
+
+  // Show loading skeleton
+  if (isLoading && paramChatId) {
+    return (
+      <main className="flex h-screen flex-col overflow-hidden">
+        <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Skeleton className="h-5 w-48" />
+        </header>
+
+        <div className="relative flex-1 overflow-y-auto">
+          <ChatContainerRoot className="h-full">
+            <ChatContainerContent className="space-y-0 px-5 py-12">
+              {/* Skeleton messages */}
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="mx-auto w-full max-w-3xl space-y-4 px-6"
+                >
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </ChatContainerContent>
+          </ChatContainerRoot>
+        </div>
+
+        <div className="bg-background z-10 shrink-0 px-3 pb-3 md:px-5 md:pb-5">
+          <div className="mx-auto max-w-3xl">
+            <Skeleton className="h-24 w-full rounded-3xl" />
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Show error state
+  if (isError && paramChatId) {
+    return (
+      <main className="flex h-screen flex-col overflow-hidden">
+        <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <div className="text-foreground">Error</div>
+        </header>
+
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center space-y-4">
+            <p className="text-lg font-medium text-destructive">
+              Failed to load conversation
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {error?.message ||
+                "An error occurred while loading the conversation"}
+            </p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex h-screen flex-col overflow-hidden">
       <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
         <SidebarTrigger className="-ml-1" />
-        <div className="text-foreground">Project roadmap discussion</div>
+        <div className="text-foreground">{data?.title || "New Chat"}</div>
       </header>
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">
@@ -120,7 +222,7 @@ export const Chat = () => {
                       </MessageActions>
                     </div>
                   ) : (
-                    <div className="group flex flex-col items-end gap-1">
+                    <div className="group flex flex-col items-end gap-1 w-full">
                       <MessageContent className="bg-muted text-primary max-w-[85%] rounded-3xl px-5 py-2.5 sm:max-w-[75%]">
                         {message.parts
                           .map((part) =>

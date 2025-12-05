@@ -36,3 +36,5 @@ export const conversationRelations = relations(
     messages: many(messageTable),
   })
 );
+
+export type Conversation = typeof conversationTable.$inferSelect;
