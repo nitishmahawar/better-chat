@@ -11,10 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as chatRouteRouteImport } from './routes/(chat)/route'
 import { Route as chatIndexRouteImport } from './routes/(chat)/index'
+import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as ApiRpcSplatRouteImport } from './routes/api.rpc.$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
+import { Route as chatCIdRouteImport } from './routes/(chat)/c.$id'
 
 const chatRouteRoute = chatRouteRouteImport.update({
   id: '/(chat)',
@@ -24,6 +26,11 @@ const chatIndexRoute = chatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => chatRouteRoute,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
@@ -45,18 +52,27 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const chatCIdRoute = chatCIdRouteImport.update({
+  id: '/c/$id',
+  path: '/c/$id',
+  getParentRoute: () => chatRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof authLoginRoute
   '/api/$': typeof ApiSplatRoute
+  '/api/chat': typeof ApiChatRoute
   '/': typeof chatIndexRoute
+  '/c/$id': typeof chatCIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof authLoginRoute
   '/api/$': typeof ApiSplatRoute
+  '/api/chat': typeof ApiChatRoute
   '/': typeof chatIndexRoute
+  '/c/$id': typeof chatCIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
@@ -65,21 +81,39 @@ export interface FileRoutesById {
   '/(chat)': typeof chatRouteRouteWithChildren
   '/(auth)/login': typeof authLoginRoute
   '/api/$': typeof ApiSplatRoute
+  '/api/chat': typeof ApiChatRoute
   '/(chat)/': typeof chatIndexRoute
+  '/(chat)/c/$id': typeof chatCIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/login' | '/api/$' | '/' | '/api/auth/$' | '/api/rpc/$'
+  fullPaths:
+    | '/login'
+    | '/api/$'
+    | '/api/chat'
+    | '/'
+    | '/c/$id'
+    | '/api/auth/$'
+    | '/api/rpc/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/api/$' | '/' | '/api/auth/$' | '/api/rpc/$'
+  to:
+    | '/login'
+    | '/api/$'
+    | '/api/chat'
+    | '/'
+    | '/c/$id'
+    | '/api/auth/$'
+    | '/api/rpc/$'
   id:
     | '__root__'
     | '/(chat)'
     | '/(auth)/login'
     | '/api/$'
+    | '/api/chat'
     | '/(chat)/'
+    | '/(chat)/c/$id'
     | '/api/auth/$'
     | '/api/rpc/$'
   fileRoutesById: FileRoutesById
@@ -88,6 +122,7 @@ export interface RootRouteChildren {
   chatRouteRoute: typeof chatRouteRouteWithChildren
   authLoginRoute: typeof authLoginRoute
   ApiSplatRoute: typeof ApiSplatRoute
+  ApiChatRoute: typeof ApiChatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
 }
@@ -107,6 +142,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof chatIndexRouteImport
       parentRoute: typeof chatRouteRoute
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/$': {
       id: '/api/$'
@@ -136,15 +178,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(chat)/c/$id': {
+      id: '/(chat)/c/$id'
+      path: '/c/$id'
+      fullPath: '/c/$id'
+      preLoaderRoute: typeof chatCIdRouteImport
+      parentRoute: typeof chatRouteRoute
+    }
   }
 }
 
 interface chatRouteRouteChildren {
   chatIndexRoute: typeof chatIndexRoute
+  chatCIdRoute: typeof chatCIdRoute
 }
 
 const chatRouteRouteChildren: chatRouteRouteChildren = {
   chatIndexRoute: chatIndexRoute,
+  chatCIdRoute: chatCIdRoute,
 }
 
 const chatRouteRouteWithChildren = chatRouteRoute._addFileChildren(
@@ -155,6 +206,7 @@ const rootRouteChildren: RootRouteChildren = {
   chatRouteRoute: chatRouteRouteWithChildren,
   authLoginRoute: authLoginRoute,
   ApiSplatRoute: ApiSplatRoute,
+  ApiChatRoute: ApiChatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
 }

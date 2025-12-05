@@ -1,3 +1,5 @@
+import { ChatSidebar } from "@/components/chat-sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/(chat)")({
@@ -6,8 +8,9 @@ export const Route = createFileRoute("/(chat)")({
 
 function RouteComponent() {
   return (
-    <div>
+    <SidebarProvider>
+      <ChatSidebar />
       <Outlet />
-    </div>
+    </SidebarProvider>
   );
 }

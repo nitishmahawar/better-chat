@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Google } from "@/components/icons/google";
-import { LinkIcon, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
@@ -37,8 +37,11 @@ const RouteComponent = () => {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2 font-semibold">
-            <MessageCircle className="size-4" /> <span>Better Chat</span>
+          <div className="flex items-center justify-center gap-2">
+            <MessageCircle className="size-4" strokeWidth={2} />
+            <div className="text-md font-base text-primary tracking-tight">
+              BetterChat
+            </div>
           </div>
           <CardTitle className="text-lg">Sign in</CardTitle>
           <CardDescription>Continue to start chatting with AI</CardDescription>
