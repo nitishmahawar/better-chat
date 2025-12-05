@@ -30,9 +30,11 @@ import {
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, generateId } from "ai";
 import { LoadingMessage } from "./loading-message";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/orpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 
 interface ChatProps {
   paramChatId?: string;
@@ -41,11 +43,24 @@ interface ChatProps {
 export const Chat = ({ paramChatId }: ChatProps) => {
   const conversationId = useRef<string>(paramChatId || generateId());
   const [prompt, setPrompt] = useState("");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { sendMessage, status, messages, setMessages } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/chat",
     }),
     id: conversationId.current,
+    onFinish: () => {
+      if (!paramChatId) {
+        queryClient.invalidateQueries({
+          queryKey: orpc.conversations.list.key(),
+        });
+        navigate({ to: "/c/$id", params: { id: conversationId.current } });
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to send message");
+    },
   });
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -84,46 +99,6 @@ export const Chat = ({ paramChatId }: ChatProps) => {
     );
   };
 
-  // Show loading skeleton
-  if (isLoading && paramChatId) {
-    return (
-      <main className="flex h-screen flex-col overflow-hidden">
-        <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Skeleton className="h-5 w-48" />
-        </header>
-
-        <div className="relative flex-1 overflow-y-auto">
-          <ChatContainerRoot className="h-full">
-            <ChatContainerContent className="space-y-0 px-5 py-12">
-              {/* Skeleton messages */}
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="mx-auto w-full max-w-3xl space-y-4 px-6"
-                >
-                  <div className="flex items-start gap-3">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-4 w-1/2" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </ChatContainerContent>
-          </ChatContainerRoot>
-        </div>
-
-        <div className="bg-background z-10 shrink-0 px-3 pb-3 md:px-5 md:pb-5">
-          <div className="mx-auto max-w-3xl">
-            <Skeleton className="h-24 w-full rounded-3xl" />
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   // Show error state
   if (isError && paramChatId) {
     return (
@@ -155,7 +130,7 @@ export const Chat = ({ paramChatId }: ChatProps) => {
     <main className="flex h-screen flex-col overflow-hidden">
       <header className="bg-background z-10 flex h-14 w-full shrink-0 items-center gap-2 border-b px-4">
         <SidebarTrigger className="-ml-1" />
-        <div className="text-foreground">{data?.title || "New Chat"}</div>
+        <div className="text-foreground empty:hidden">{data?.title}</div>
       </header>
 
       <div ref={chatContainerRef} className="relative flex-1 overflow-y-auto">

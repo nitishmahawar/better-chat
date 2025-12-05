@@ -7,16 +7,36 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSkeleton,
 } from "@/components/ui/sidebar";
-import { MessageCircle, PlusIcon, Search } from "lucide-react";
+import {
+  Edit,
+  MessageCircle,
+  MoreHorizontal,
+  PlusIcon,
+  Search,
+  Trash,
+} from "lucide-react";
 import { NavUser } from "./nav-user";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { orpc } from "@/orpc/client";
 import { useInView } from "react-intersection-observer";
 import { Conversation } from "@/db/schema/conversation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Skeleton } from "./ui/skeleton";
+import { EditConversationDialog } from "./edit-conversation-dialog";
+import { DeleteConversationDialog } from "./delete-conversation-dialog";
+import { Spinner } from "./ui/spinner";
 
 // Helper function to group conversations by time period
 const groupConversationsByPeriod = (conversations: Conversation[]) => {
@@ -74,6 +94,11 @@ export const ChatSidebar = () => {
   const { id } = useParams({ strict: false });
   const currentConversationId = id;
 
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedConversation, setSelectedConversation] =
+    useState<Conversation | null>(null);
+
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery(
       orpc.conversations.list.infiniteOptions({
@@ -87,8 +112,6 @@ export const ChatSidebar = () => {
         },
       })
     );
-
-  console.log(data);
 
   const { ref, inView } = useInView({
     threshold: 0,
@@ -115,7 +138,7 @@ export const ChatSidebar = () => {
 
   return (
     <Sidebar>
-      <SidebarHeader className="px-2 py-4 space-y-2.5">
+      <SidebarHeader className="px-2 py-4 space-y-3">
         <div className="flex flex-row items-center justify-between gap-2">
           <Link to="/" className="flex flex-row items-center gap-2 px-2">
             <MessageCircle className="size-4" strokeWidth={2} />
@@ -123,12 +146,13 @@ export const ChatSidebar = () => {
               BetterChat
             </div>
           </Link>
-          <Button variant="ghost" className="size-8">
-            <Search className="size-4" />
-          </Button>
         </div>
         <Link to="/">
-          <Button variant="outline" className="flex w-full items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex w-full items-center gap-2"
+          >
             <PlusIcon className="size-4" />
             <span>New Chat</span>
           </Button>
@@ -136,9 +160,21 @@ export const ChatSidebar = () => {
       </SidebarHeader>
       <SidebarContent>
         {isLoading ? (
-          <div className="flex items-center justify-center p-4">
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          </div>
+          Array.from({ length: 5 }).map((_, index) => (
+            <SidebarGroup key={index}>
+              <SidebarGroupLabel>
+                <Skeleton className="h-4 w-24" />
+              </SidebarGroupLabel>
+
+              <SidebarMenu>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <SidebarMenuItem key={index}>
+                    <SidebarMenuSkeleton showIcon />
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ))
         ) : groupedConversations.length === 0 ? (
           <div className="flex items-center justify-center p-4">
             <p className="text-sm text-muted-foreground">
@@ -152,15 +188,45 @@ export const ChatSidebar = () => {
                 <SidebarGroupLabel>{group.period}</SidebarGroupLabel>
                 <SidebarMenu>
                   {group.conversations.map((conversation) => (
-                    <SidebarMenuButton
-                      key={conversation.id}
-                      asChild
-                      isActive={currentConversationId === conversation.id}
-                    >
-                      <Link to="/c/$id" params={{ id: conversation.id }}>
-                        <span>{conversation.title || "Untitled"}</span>
-                      </Link>
-                    </SidebarMenuButton>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        key={conversation.id}
+                        asChild
+                        isActive={currentConversationId === conversation.id}
+                      >
+                        <Link to="/c/$id" params={{ id: conversation.id }}>
+                          <span>{conversation.title || "Untitled"}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <SidebarMenuAction showOnHover>
+                            <MoreHorizontal />
+                          </SidebarMenuAction>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedConversation(conversation);
+                              setEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit />
+                            <span>Rename</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => {
+                              setSelectedConversation(conversation);
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </SidebarMenuItem>
                   ))}
                 </SidebarMenu>
               </SidebarGroup>
@@ -168,11 +234,7 @@ export const ChatSidebar = () => {
             {/* Sentinel element for infinite scroll */}
             {hasNextPage && (
               <div ref={ref} className="flex items-center justify-center p-4">
-                {isFetchingNextPage && (
-                  <p className="text-sm text-muted-foreground">
-                    Loading more...
-                  </p>
-                )}
+                {isFetchingNextPage && <Spinner />}
               </div>
             )}
           </>
@@ -181,6 +243,24 @@ export const ChatSidebar = () => {
       <SidebarFooter>
         <NavUser />
       </SidebarFooter>
+
+      {/* Dialogs */}
+      {selectedConversation && (
+        <>
+          <EditConversationDialog
+            conversationId={selectedConversation.id}
+            currentTitle={selectedConversation.title || "Untitled"}
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+          />
+          <DeleteConversationDialog
+            conversationId={selectedConversation.id}
+            conversationTitle={selectedConversation.title || "Untitled"}
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+          />
+        </>
+      )}
     </Sidebar>
   );
 };
